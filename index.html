@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<script type="text/javascript">
+var gl;
+var shaderProgram;
+var vertexPositionBuffer;
+var vertexColorBuffer;
+var cameraAngleX = 60.0;
+var cameraAngleY = 0;
+var posX = 0.0; 
+var posY = -0.2; 
+var posZ = 2.85; 
+var matrix = [
+  [1, 1, 1, 0, 1, 1, 1, 1, 1, 1],
+  [1, 0, 1, 0, 0, 0, 0, 1, 0, 1],
+  [1, 0, 0, 0, 1, 0, 0, 0, 1, 1],
+  [1, 0, 1, 1, 0, 1, 0, 1, 0, 1],
+  [1, 0, 0, 1, 1, 0, 0, 0, 1, 1],
+  [1, 1, 0, 1, 0, 0, 1, 1, 0, 1],
+  [1, 0, 0, 1, 1, 0, 0, 0, 0, 1],
+  [1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+  [1, 1, 0, 1, 1, 1, 1, 1, 1, 1]
+];
+
+function MatrixMul(a, b) {
+  var c = [
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0
+  ];
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      c[i * 4 + j] = 0.0;
+      for (let k = 0; k < 4; k++) {
+        c[i * 4 + j] += a[i * 4 + k] * b[k * 4 + j];
+      }
+    }
+  }
+  return c;
+}
+
+function startGL() {
+  //alert("StartGL");
+  document.onkeydown = handlekeydown;
+  let canvas = document.getElementById("canvas3D");
+  gl = canvas.getContext("experimental-webgl");
+  gl.viewportWidth = canvas.width;
+  gl.viewportHeight = canvas.height;
+
+  const vertexShaderSource = ` 
+    precision highp float;
+    attribute vec3 aVertexPosition;
+    attribute vec3 aVertexColor;
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+    varying vec3 vColor;
+    void main(void) {
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+        vColor = aVertexColor;
+    }
+  `;
+  const fragmentShaderSource = `
+    precision highp float;
+    varying vec3 vColor;
+    void main(void) {
+        gl_FragColor = vec4(vColor, 1.0);
+    }
+  `;
+  let fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+  let vertexShader = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(fragmentShader, fragmentShaderSource);
+  gl.shaderSource(vertexShader, vertexShaderSource);
+  gl.compileShader(fragmentShader);
+  gl.compileShader(vertexShader);
+  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+    alert(gl.getShaderInfoLog(fragmentShader));
+    return null;
+  }
+  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+    alert(gl.getShaderInfoLog(vertexShader));
+    return null;
+  }
+
+  shaderProgram = gl.createProgram();
+  gl.attachShader(shaderProgram, vertexShader);
+  gl.attachShader(shaderProgram, fragmentShader);
+  gl.linkProgram(shaderProgram);
+  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) alert("Could not initialise shaders");
+
+  function createRect(mx, my, mz, dax, day, daz, dbx, dby, dbz, colors) {
+    let vertexPosition = [
+      mx, my, mz, mx + dax, my + day, mz + daz, mx + dax + dbx, my + day + dby, mz + daz + dbz,
+      mx, my, mz, mx + dax + dbx, my + day + dby, mz + daz + dbz, mx + dbx, my + dby, mz + dbz
+    ];
+
+    let vertexColors = [
+      colors[0], colors[1], colors[2],
+      colors[3], colors[4], colors[5],
+      colors[6], colors[7], colors[8],
+      colors[0], colors[1], colors[2],
+      colors[6], colors[7], colors[8],
+      colors[9], colors[10], colors[11]
+    ];
+
+    return { vertexPosition, vertexColors };
+  }
+
+  let vertexPosition = [];
+  let vertexColors = [];
+
+  for (let i = 0; i < matrix.length; i++) {
+    for (let j = 0; j < matrix[i].length; j++) {
+      if (matrix[i][j] === 1) {
+        let x = i * 2;
+        let z = j * 2;
+        let colorBase = 0.4 + 0.2 * Math.random();
+        let colors = [
+          colorBase, 0.0, 0.0,
+          colorBase + 0.1, 0.0, 0.0,
+          colorBase + 0.2, 0.0, 0.0,
+          colorBase + 0.3, 0.0, 0.0
+        ];
+
+        let rect = createRect(x, -1, z, 2, 0, 0, 0, 2, 0, colors);
+        vertexPosition.push(...rect.vertexPosition);
+        vertexColors.push(...rect.vertexColors);
+
+        rect = createRect(x, -1, z, 2, 0, 0, 0, 0, 2, colors);
+        vertexPosition.push(...rect.vertexPosition);
+        vertexColors.push(...rect.vertexColors);
+
+        rect = createRect(x, -1, z, 0, 2, 0, 0, 0, 2, colors);
+        vertexPosition.push(...rect.vertexPosition);
+        vertexColors.push(...rect.vertexColors);
+
+        rect = createRect(x + 2, 1, z + 2, -2, 0, 0, 0, -2, 0, colors);
+        vertexPosition.push(...rect.vertexPosition);
+        vertexColors.push(...rect.vertexColors);
+
+        rect = createRect(x + 2, 1, z + 2, -2, 0, 0, 0, 0, -2, colors);
+        vertexPosition.push(...rect.vertexPosition);
+        vertexColors.push(...rect.vertexColors);
+
+        rect = createRect(x + 2, 1, z + 2, 0, -2, 0, 0, 0, -2, colors);
+        vertexPosition.push(...rect.vertexPosition);
+        vertexColors.push(...rect.vertexColors);
+      }
+    }
+  }
+
+  function createFloor(width, depth, height) {
+    let vertexPosition = [
+      0, height, 0,
+      0, height, depth,
+      width, height, depth,
+      0, height, 0,
+      width, height, depth,
+      width, height, 0
+    ];
+
+    let colorBase = 0.4 + 0.2 * Math.random();
+    let colors = [
+      colorBase, 0.0, 0.0,
+      colorBase + 0.1, 0.0, 0.0,
+      colorBase + 0.2, 0.0, 0.0,
+      colorBase, 0.0, 0.0,
+      colorBase + 0.2, 0.0, 0.0,
+      colorBase + 0.3, 0.0, 0.0
+    ];
+
+    return { vertexPosition, colors };
+  }
+
+  let floor = createFloor(matrix.length * 2, matrix[0].length * 2, -1);
+  vertexPosition.push(...floor.vertexPosition);
+  vertexColors.push(...floor.colors);
+
+  vertexPositionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPosition), gl.STATIC_DRAW);
+  vertexPositionBuffer.itemSize = 3;
+  vertexPositionBuffer.numItems = vertexPosition.length / 3;
+
+  vertexColorBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexColorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexColors), gl.STATIC_DRAW);
+  vertexColorBuffer.itemSize = 3;
+  vertexColorBuffer.numItems = vertexColors.length / 3;
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.clearColor(0.5, 0.5, 0.5, 1.0);
+
+  (function animLoop() {
+    drawScene();
+    requestAnimationFrame(animLoop);
+  })();
+
+}
+
+function handlekeydown(e) {
+  if (e.keyCode == 69) cameraAngleX += 2.0; // E
+  if (e.keyCode == 81) cameraAngleX -= 2.0; // Q
+
+  var moveDirectionX = Math.sin(cameraAngleX * Math.PI / 180);
+  var moveDirectionZ = Math.cos(cameraAngleX * Math.PI / 180);
+
+  if (e.keyCode == 87) { // W 
+    posX -= 0.1 * moveDirectionX;
+    posZ += 0.1 * moveDirectionZ;
+  }
+  if (e.keyCode == 83) { // S 
+    posX += 0.1 * moveDirectionX;
+    posZ -= 0.1 * moveDirectionZ;
+  }
+  if (e.keyCode == 65) { // A
+    posX += 0.1 * moveDirectionZ;
+    posZ += 0.1 * moveDirectionX;
+  }
+  if (e.keyCode == 68) { // D 
+    posX -= 0.1 * moveDirectionZ;
+    posZ -= 0.1 * moveDirectionX;
+  }
+  if (e.keyCode == 70) posY += 0.1; // F 
+  if (e.keyCode == 82) posY -= 0.1; // R 
+}
+
+function getProjectionMatrix(angle, a, zMin, zMax) {
+    var ang = Math.tan((angle * .5) * Math.PI / 180);
+    return [
+       0.5 / ang, 0 , 0, 0,
+       0, 0.5 * a / ang, 0, 0,
+       0, 0, -(zMax + zMin) / (zMax - zMin), -1,
+       0, 0, (-2 * zMax * zMin) / (zMax - zMin), 0
+    ];
+}
+
+function drawScene() {
+    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    let uPMatrix = getProjectionMatrix(40, gl.viewportWidth / gl.viewportHeight, 1, 100);
+    let uMVMatrix = [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, -10, 1
+    ];
+
+    let uMVRotateX = [
+        1, 0, 0, 0,
+        0, Math.cos(cameraAngleY * Math.PI / 180), Math.sin(cameraAngleY * Math.PI / 180), 0,
+        0, -Math.sin(cameraAngleY * Math.PI / 180), Math.cos(cameraAngleY * Math.PI / 180), 0,
+        0, 0, 0, 1
+    ];
+
+    let uMVRotateY = [
+        Math.cos(cameraAngleX * Math.PI / 180), 0, -Math.sin(cameraAngleX * Math.PI / 180), 0,
+        0, 1, 0, 0,
+        Math.sin(cameraAngleX * Math.PI / 180), 0, Math.cos(cameraAngleX * Math.PI / 180), 0,
+        0, 0, 0, 1
+    ];
+
+    let uMVTranslate = [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        posX, posY, posZ, 1
+    ];
+    uMVMatrix = MatrixMul(uMVMatrix, uMVTranslate);
+    uMVMatrix = MatrixMul(uMVMatrix, uMVRotateX);
+    uMVMatrix = MatrixMul(uMVMatrix, uMVRotateY);
+
+    gl.useProgram(shaderProgram);
+    gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, "uPMatrix"), false, uPMatrix);
+    gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, "uMVMatrix"), false, uMVMatrix);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
+    gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, "aVertexPosition"), vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, "aVertexPosition"));
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexColorBuffer);
+    gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, "aVertexColor"), vertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, "aVertexColor"));
+
+    gl.drawArrays(gl.TRIANGLES, 0, vertexPositionBuffer.numItems);
+}
+</script>
+</head>
+<body onload="startGL()">
+<canvas id="canvas3D" style="border:none;float:left;" width="800" height="800"></canvas>
+<div style="float:left;margin-left: 10px;">
+  <h3>Instrukcja poruszania się</h3>
+  <ul>
+    <li><strong>W:</strong> Przód</li>
+    <li><strong>S:</strong> Tył</li>
+    <li><strong>A:</strong> Lewo</li>
+    <li><strong>D:</strong> Prawo</li>
+    <li><strong>Q:</strong> Obrót w lewo</li>
+    <li><strong>E:</strong> Obrót w prawo</li>
+    <li><strong>F:</strong> Leć w dół</li>
+    <li><strong>R:</strong> Leć w górę</li>
+  </ul>
+</div>
+</body>
+</html>
